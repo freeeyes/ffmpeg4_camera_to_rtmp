@@ -36,10 +36,10 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 {
 	int ret = 0;
 
-	unsigned char* src_data[4];
-	unsigned char* dst_data[4];
-	int src_linesize[4];
-	int dst_linesize[4];
+	unsigned char* src_data[AV_NUM_DATA_POINTERS];
+	unsigned char* dst_data[AV_NUM_DATA_POINTERS];
+	int src_linesize[AV_NUM_DATA_POINTERS];
+	int dst_linesize[AV_NUM_DATA_POINTERS];
 
 	//init device
 	avdevice_register_all();
@@ -90,7 +90,7 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 
 	//±àÂëÆ÷
 	AVCodec* encodec = nullptr;
-	encodec = avcodec_find_encoder_by_name("libx264");
+	encodec = avcodec_find_encoder(AV_CODEC_ID_H264);
 	if (!encodec) {
 		av_error_string_output(__FUNCTION__, __LINE__, ret);
 		av_free_context(ictx, octx);
@@ -105,16 +105,8 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 		av_free_context(ictx, octx);
 		return;
 	}
-
-	ret = avformat_alloc_output_context2(&octx, 0, "flv", out_url_file);
-	if (!octx)
-	{
-		av_error_string_output(__FUNCTION__, __LINE__, ret);
-		av_free_context(ictx, octx);
-		return;
-	}
-
-	encodec_ctx->bit_rate = 400000; 
+	encodec_ctx->codec_id = encodec->id;
+	encodec_ctx->bit_rate = 400000;
 	encodec_ctx->width = ictx->streams[stream_index]->codecpar->width;
 	encodec_ctx->height = ictx->streams[stream_index]->codecpar->height;
 	encodec_ctx->time_base.num = 1;
@@ -124,9 +116,11 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 	encodec_ctx->gop_size = 10;
 	encodec_ctx->max_b_frames = 0;
 	encodec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+	encodec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
 	/* Some formats want stream headers to be separate. */
-	if (octx->oformat->flags & AVFMT_GLOBALHEADER)
-		encodec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	//if (octx->oformat->flags & AVFMT_GLOBALHEADER)
+	//	encodec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 	AVDictionary* param = NULL;
 	av_dict_set(&param, "preset", "superfast", 0);
 	av_dict_set(&param, "tune", "zerolatency", 0);
@@ -139,6 +133,14 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 	}
 
 	av_dict_free(&param);
+
+	ret = avformat_alloc_output_context2(&octx, 0, "flv", out_url_file);
+	if (!octx)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
 
 	//traversal input
 	AVStream* output_stream = avformat_new_stream(octx, encodec_ctx->codec);
