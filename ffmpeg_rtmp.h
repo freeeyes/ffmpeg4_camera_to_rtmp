@@ -23,6 +23,13 @@ using namespace std;
 #pragma comment(lib, "avdevice.lib")
 #pragma comment(lib, "swscale.lib")
 
+class CVedioDevice
+{
+public:
+	char vedioname[128] = {'\0'};
+	char vediodesc[256] = {'\0'};
+};
+
 double av_r2d(AVRational r);
 
 void av_error_string_output(const char* funcname, int line, int ret);
@@ -33,4 +40,4 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 
 void av_file_to_rtmp(const char* in_url_file, const char* out_url_file);
 
-void find_win_vedio_device();
+void find_win_vedio_device(std::vector<CVedioDevice>& vediodevicelist);

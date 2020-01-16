@@ -6,10 +6,21 @@
 int main()
 {
 	//Integrated Camera
-	find_win_vedio_device();
-	av_camera_to_rtmp("video=Integrated Camera", "rtmp://127.0.0.1:1735/live/12345", 320, 240);
-	//av_camera_to_rtmp("video=Integrated Camera", "example.mp4", 320, 240);
-	//captureFrame();
+	std::vector<CVedioDevice> vediodevicelist;
+	find_win_vedio_device(vediodevicelist);
+
+	if (vediodevicelist.size() > 0)
+	{
+		char szVedioCommand[128] = { '\0' };
+		snprintf(szVedioCommand, 128, "video=%s", vediodevicelist[0].vedioname);
+		cout << "[main]" << szVedioCommand << endl;
+		av_camera_to_rtmp(szVedioCommand, "rtmp://192.145.179.70:20011/live/12345", 320, 240);
+		//av_camera_to_rtmp(szVedioCommand, "example.mp4", 320, 240);
+	}
+	else
+	{
+		cout << "[main]no find camera." << endl;
+	}
 	getchar();
     return 0;
 }

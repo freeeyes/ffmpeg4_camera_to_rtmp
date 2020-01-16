@@ -425,15 +425,20 @@ void av_file_to_rtmp(const char* in_url_file, const char* out_url_file)
 	cout << "[av_file_to_rtmp]test ffmpeg to rtmp ok." << endl;
 }
 
-void find_win_vedio_device()
+void find_win_vedio_device(std::vector<CVedioDevice>& vediodevicelist)
 {
 	//获取摄像头信息
+	vediodevicelist.clear();
+
 	std::vector<TDeviceName> vectorDevices;
 	GetAudioVideoInputDevices(vectorDevices, CLSID_VideoInputDeviceCategory);
-	for (auto itor = vectorDevices.begin(); itor != vectorDevices.end(); ++itor)
+
+	for (TDeviceName& vediodeviceinfo : vectorDevices)
 	{
-		cout << "FriendlyName= " << WCharToChar(itor->FriendlyName) << endl;
-		cout << "MonikerName = " << WCharToChar(itor->MonikerName) << endl;
+		CVedioDevice vediodevice;
+		snprintf(vediodevice.vedioname, 128, "%s", WCharToChar(vediodeviceinfo.FriendlyName));
+		snprintf(vediodevice.vediodesc, 256, "%s", WCharToChar(vediodeviceinfo.MonikerName));
+		vediodevicelist.push_back(vediodevice);
 	}
 
 	vectorDevices.clear();
