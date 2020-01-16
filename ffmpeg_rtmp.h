@@ -12,6 +12,10 @@ extern "C"
 #include "libavutil/time.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/pixdesc.h"
+#include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/samplefmt.h>
+#include <libswresample/swresample.h>
 }
 #include "vediolist.h"
 #include <iostream>
@@ -22,8 +26,11 @@ using namespace std;
 #pragma comment(lib, "avcodec.lib")
 #pragma comment(lib, "avdevice.lib")
 #pragma comment(lib, "swscale.lib")
+#pragma comment(lib, "swresample.lib")
 
-class CVedioDevice
+const char* RTMP_URL = "rtmp://192.144.179.70:20011/live/12345";
+
+class CDeviceInfo
 {
 public:
 	char vedioname[128] = {'\0'};
@@ -38,6 +45,10 @@ void av_free_context(AVFormatContext* ictx, AVFormatContext* octx);
 
 void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, int h);
 
+void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file);
+
 void av_file_to_rtmp(const char* in_url_file, const char* out_url_file);
 
-void find_win_vedio_device(std::vector<CVedioDevice>& vediodevicelist);
+void find_win_vedio_device(std::vector<CDeviceInfo>& vediodevicelist);
+
+void find_win_audio_device(std::vector<CDeviceInfo>& vediodevicelist);

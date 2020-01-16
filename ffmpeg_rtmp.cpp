@@ -57,8 +57,11 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 	av_dict_set(&ioptions, "pixel_format", av_get_pix_fmt_name(AV_PIX_FMT_YUYV422), 0);
 	av_dict_set(&ioptions, "framerate", "30", 0);
 
+	string strACS = (string)in_camera;
+	string strUTF8 = ASCII2UTF_8(strACS);
+
 	AVInputFormat* ifmt = av_find_input_format("dshow");
-	ret = avformat_open_input(&ictx, in_camera, ifmt, &ioptions);
+	ret = avformat_open_input(&ictx, strUTF8.c_str(), ifmt, &ioptions);
 	if (0 != ret)
 	{
 		av_error_string_output(__FUNCTION__, __LINE__, ret);
@@ -277,6 +280,86 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 	cout << "[av_camera_to_rtmp]test ffmpeg to rtmp ok." << endl;
 }
 
+void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file)
+{
+	int ret = 0;
+	int audio_stream_index = -1;
+	int src_channel_layout = 0;
+	int src_sample_rate = 0;
+	AVSampleFormat src_sample_fmt;
+	int dst_sample_rate = 0;
+	int dst_channel_layout = 0;
+	int dst_sample_fmt = 0;
+
+	//init device
+	avdevice_register_all();
+	//init av net
+	avformat_network_init();
+
+	AVFormatContext* ictx = nullptr;  //input context
+	AVFormatContext* octx = nullptr;  //output context
+
+	AVDictionary* ioptions = nullptr;
+	av_dict_set_int(&ioptions, "sample_rate", 44100, 0);
+	av_dict_set_int(&ioptions, "sample_size", 16, 0);
+	av_dict_set_int(&ioptions, "channels", 2, 0);
+
+	string strACS = (string)in_Audio;
+	string strUTF8 = ASCII2UTF_8(strACS);
+
+	AVInputFormat* ifmt = av_find_input_format("dshow");
+	ret = avformat_open_input(&ictx, strUTF8.c_str(), ifmt, nullptr);
+	if (0 != ret)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+	av_dict_free(&ioptions);
+
+	for (int i = 0; i < ictx->nb_streams; i++)
+	{
+		if (ictx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+		{
+			audio_stream_index = i;
+			break;
+		}
+	}
+	if (-1 == audio_stream_index)
+	{
+		cout << "[av_audio_to_rtmp]no find audio stream." << endl;
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	//AVCodecContext* src_codec = ictx->streams[audio_stream_index]->codec;
+
+	//Re-sampling
+	/*
+	src_channel_layout = AV_CH_LAYOUT_MONO;
+	src_sample_rate = src_codec->sample_rate;
+	src_sample_fmt = src_codec->sample_fmt;
+
+	dst_channel_layout = AV_CH_LAYOUT_STEREO;
+	dst_sample_rate = src_codec->sample_rate;
+	dst_sample_fmt = AV_SAMPLE_FMT_S16;
+
+	m_audio_resample = new AudioResample();
+
+	ret = audio_resample.ARInit(m_src_channel_layout, m_src_sample_rate, m_src_sample_fmt,
+		m_dst_channel_layout, m_dst_sample_rate, m_dst_sample_fmt,
+		40);
+
+	if (ret < 0)
+	{
+		goto fail;
+	}
+	*/
+
+	av_free_context(ictx, octx);
+	cout << "[av_audio_to_rtmp]test ffmpeg to rtmp ok." << endl;
+}
+
 void av_file_to_rtmp(const char* in_url_file, const char* out_url_file)
 {
 	int ret = 0;
@@ -425,7 +508,7 @@ void av_file_to_rtmp(const char* in_url_file, const char* out_url_file)
 	cout << "[av_file_to_rtmp]test ffmpeg to rtmp ok." << endl;
 }
 
-void find_win_vedio_device(std::vector<CVedioDevice>& vediodevicelist)
+void find_win_vedio_device(std::vector<CDeviceInfo>& vediodevicelist)
 {
 	//获取摄像头信息
 	vediodevicelist.clear();
@@ -435,11 +518,26 @@ void find_win_vedio_device(std::vector<CVedioDevice>& vediodevicelist)
 
 	for (TDeviceName& vediodeviceinfo : vectorDevices)
 	{
-		CVedioDevice vediodevice;
+		CDeviceInfo vediodevice;
 		snprintf(vediodevice.vedioname, 128, "%s", WCharToChar(vediodeviceinfo.FriendlyName));
 		snprintf(vediodevice.vediodesc, 256, "%s", WCharToChar(vediodeviceinfo.MonikerName));
 		vediodevicelist.push_back(vediodevice);
 	}
+}
 
-	vectorDevices.clear();
+void find_win_audio_device(std::vector<CDeviceInfo>& vediodevicelist)
+{
+	//获取音频信息
+	vediodevicelist.clear();
+
+	std::vector<TDeviceName> audioDevices;
+	GetAudioVideoInputDevices(audioDevices, CLSID_AudioInputDeviceCategory);
+
+	for (TDeviceName& audiodeviceinfo : audioDevices)
+	{
+		CDeviceInfo audiodevice;
+		snprintf(audiodevice.vedioname, 128, "%s", WCharToChar(audiodeviceinfo.FriendlyName));
+		snprintf(audiodevice.vediodesc, 256, "%s", WCharToChar(audiodeviceinfo.MonikerName));
+		vediodevicelist.push_back(audiodevice);
+	}
 }
