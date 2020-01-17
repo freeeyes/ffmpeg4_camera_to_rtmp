@@ -280,16 +280,11 @@ void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, i
 	cout << "[av_camera_to_rtmp]test ffmpeg to rtmp ok." << endl;
 }
 
-void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file)
+void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int samplerate, const char* out_url_file)
 {
 	int ret = 0;
 	int audio_stream_index = -1;
-	int src_channel_layout = 0;
-	int src_sample_rate = 0;
-	AVSampleFormat src_sample_fmt;
-	int dst_sample_rate = 0;
-	int dst_channel_layout = 0;
-	int dst_sample_fmt = 0;
+	int samplebyte = 2;
 
 	//init device
 	avdevice_register_all();
@@ -300,15 +295,15 @@ void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file)
 	AVFormatContext* octx = nullptr;  //output context
 
 	AVDictionary* ioptions = nullptr;
-	av_dict_set_int(&ioptions, "sample_rate", 44100, 0);
-	av_dict_set_int(&ioptions, "sample_size", 16, 0);
-	av_dict_set_int(&ioptions, "channels", 2, 0);
+	av_dict_set_int(&ioptions, "sample_rate", samplerate, 0);
+	av_dict_set_int(&ioptions, "sample_size", samplesize, 0);
+	av_dict_set_int(&ioptions, "channels", channels, 0);
 
 	string strACS = (string)in_Audio;
 	string strUTF8 = ASCII2UTF_8(strACS);
 
 	AVInputFormat* ifmt = av_find_input_format("dshow");
-	ret = avformat_open_input(&ictx, strUTF8.c_str(), ifmt, nullptr);
+	ret = avformat_open_input(&ictx, strUTF8.c_str(), ifmt, &ioptions);
 	if (0 != ret)
 	{
 		av_error_string_output(__FUNCTION__, __LINE__, ret);
@@ -317,7 +312,9 @@ void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file)
 	}
 	av_dict_free(&ioptions);
 
-	for (int i = 0; i < ictx->nb_streams; i++)
+	av_dump_format(ictx, 0, in_Audio, 0);
+
+	for (unsigned int i = 0; i < ictx->nb_streams; i++)
 	{
 		if (ictx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
 		{
@@ -332,30 +329,181 @@ void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file)
 		return;
 	}
 
-	//AVCodecContext* src_codec = ictx->streams[audio_stream_index]->codec;
+	cout << "[av_audio_to_rtmp]fmt=" << av_get_sample_fmt_name((AVSampleFormat)ictx->streams[audio_stream_index]->codecpar->format) << endl;
 
 	//Re-sampling
-	/*
-	src_channel_layout = AV_CH_LAYOUT_MONO;
-	src_sample_rate = src_codec->sample_rate;
-	src_sample_fmt = src_codec->sample_fmt;
-
-	dst_channel_layout = AV_CH_LAYOUT_STEREO;
-	dst_sample_rate = src_codec->sample_rate;
-	dst_sample_fmt = AV_SAMPLE_FMT_S16;
-
-	m_audio_resample = new AudioResample();
-
-	ret = audio_resample.ARInit(m_src_channel_layout, m_src_sample_rate, m_src_sample_fmt,
-		m_dst_channel_layout, m_dst_sample_rate, m_dst_sample_fmt,
-		40);
-
-	if (ret < 0)
+	AVSampleFormat outSampleFmt = AVSampleFormat::AV_SAMPLE_FMT_FLTP;
+	SwrContext* asc = nullptr;
+	asc = swr_alloc_set_opts(asc,
+		av_get_default_channel_layout(channels), outSampleFmt, samplerate,//输出格式
+		av_get_default_channel_layout(channels), (AVSampleFormat)ictx->streams[audio_stream_index]->codecpar->format, samplerate, 0, 0);//输入格式
+	if (!asc)
 	{
-		goto fail;
+		cout << "[av_audio_to_rtmp]swr_alloc_set_opts error." << endl;
+		av_free_context(ictx, octx);
+		return;
 	}
-	*/
 
+	ret = swr_init(asc);
+	if (ret != 0)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	AVFrame* pcm = av_frame_alloc();
+	pcm->format = outSampleFmt;
+	pcm->channels = channels;
+	pcm->channel_layout = av_get_default_channel_layout(channels);
+	pcm->nb_samples = 1024; //一帧音频一通道的采用数量
+	ret = av_frame_get_buffer(pcm, 0);
+	if (ret != 0)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+	if (!codec)
+	{
+		cout << "[av_audio_to_rtmp]avcodec_find_encoder AV_CODEC_ID_AAC failed!" << endl;
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	AVCodecContext* ac = avcodec_alloc_context3(codec);
+	if (!ac)
+	{
+		cout << "[av_audio_to_rtmp]avcodec_alloc_context3 failed!" << endl;
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	ac->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	ac->thread_count = 8;
+	ac->bit_rate = 40000;
+	ac->sample_rate = samplerate;
+	ac->sample_fmt = AV_SAMPLE_FMT_FLTP;
+	ac->channels = channels;
+	ac->channel_layout = av_get_default_channel_layout(channels);
+
+	AVDictionary* ooptions = nullptr;
+	av_dict_set_int(&ooptions, "sample_rate", samplerate, 0);
+	av_dict_set_int(&ooptions, "sample_size", samplesize, 0);
+	av_dict_set_int(&ooptions, "channels", channels, 0);
+
+	ret = avcodec_open2(ac, 0, &ooptions);
+	if (ret != 0)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	av_dict_free(&ooptions);
+
+	ret = avformat_alloc_output_context2(&octx, 0, "flv", out_url_file);
+	if (!octx)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	AVStream* output_stream = avformat_new_stream(octx, nullptr);
+	if (nullptr == output_stream)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, 0);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	output_stream->codecpar->codec_tag = 0;
+	ret = avcodec_parameters_from_context(output_stream->codecpar, ac);
+	if (0 != ret)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	av_dump_format(octx, 0, out_url_file, 1);
+
+	ret = avio_open(&octx->pb, out_url_file, AVIO_FLAG_WRITE);
+	if (ret != 0)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		avio_close(octx->pb);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	ret = avformat_write_header(octx, NULL);
+	if (0 > ret)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		avio_close(octx->pb);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	int frameindex = 0;
+	int64_t apts = 0;
+	AVPacket inpkt = { 0 };
+	AVPacket outpkt = { 0 };
+
+	while (1)
+	{
+		ret = av_read_frame(ictx, &inpkt);
+		if (0 != ret)
+		{
+			break;
+		}
+
+		frameindex++;
+		//cout << "frameindex=" << frameindex << endl;
+
+		if (0 >= inpkt.size)
+		{
+			continue;
+		}
+
+		const uint8_t* indata[AV_NUM_DATA_POINTERS] = { 0 };
+		indata[0] = (uint8_t*)inpkt.data;
+		int len = swr_convert(asc, pcm->data, pcm->nb_samples, //输出参数，输出存储地址和样本数量
+			indata, pcm->nb_samples
+		);
+
+		pcm->pts = apts;
+		apts += av_rescale_q(pcm->nb_samples, { 1, samplerate }, ac->time_base);
+
+		int ret = avcodec_send_frame(ac, pcm);
+		if (ret != 0)
+		{
+			continue;
+		}
+
+		ret = avcodec_receive_packet(ac, &outpkt);
+		if (ret != 0)
+		{
+			continue;
+		}
+
+		//推流
+		outpkt.pts = av_rescale_q(outpkt.pts, ac->time_base, output_stream->time_base);
+		outpkt.dts = av_rescale_q(outpkt.dts, ac->time_base, output_stream->time_base);
+		outpkt.duration = av_rescale_q(outpkt.duration, ac->time_base, output_stream->time_base);
+		ret = av_interleaved_write_frame(octx, &outpkt);
+		if (ret == 0)
+		{
+			cout << "#" << flush;
+		}
+	}
+
+	av_write_trailer(octx);
+	avio_close(octx->pb);
 	av_free_context(ictx, octx);
 	cout << "[av_audio_to_rtmp]test ffmpeg to rtmp ok." << endl;
 }

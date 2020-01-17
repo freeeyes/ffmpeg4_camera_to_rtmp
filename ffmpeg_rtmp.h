@@ -28,7 +28,7 @@ using namespace std;
 #pragma comment(lib, "swscale.lib")
 #pragma comment(lib, "swresample.lib")
 
-const char* RTMP_URL = "rtmp://192.144.179.70:20011/live/12345";
+static const  char* RTMP_URL = "rtmp://192.144.179.70:20011/live/12345";
 
 class CDeviceInfo
 {
@@ -45,7 +45,7 @@ void av_free_context(AVFormatContext* ictx, AVFormatContext* octx);
 
 void av_camera_to_rtmp(const char* in_camera, const char* out_url_file, int w, int h);
 
-void av_audio_to_rtmp(const char* in_Audio, const char* out_url_file);
+void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int samplerate, const char* out_url_file);
 
 void av_file_to_rtmp(const char* in_url_file, const char* out_url_file);
 
