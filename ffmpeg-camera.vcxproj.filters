@@ -15,10 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ffmpeg-output.cpp">
+    <ClCompile Include="ffmpeg_rtmp.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="ffmpeg_rtmp.cpp">
+    <ClCompile Include="ffmpeg-camera.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

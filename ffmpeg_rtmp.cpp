@@ -295,9 +295,12 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 	AVFormatContext* octx = nullptr;  //output context
 
 	AVDictionary* ioptions = nullptr;
-	av_dict_set_int(&ioptions, "sample_rate", samplerate, 0);
-	av_dict_set_int(&ioptions, "sample_size", samplesize, 0);
-	av_dict_set_int(&ioptions, "channels", channels, 0);
+	//av_dict_set_int(&ioptions, "sample_rate", samplerate, 0);
+	//av_dict_set_int(&ioptions, "sample_size", samplesize, 0);
+	//av_dict_set_int(&ioptions, "channels", channels, 0);
+	//av_dict_set_int(&ioptions, "b", 56, 0);
+	//av_dict_set_int(&ioptions, "ar", samplerate, 0);
+	//av_dict_set_int(&ioptions, "ac", channels, 0);
 
 	string strACS = (string)in_Audio;
 	string strUTF8 = ASCII2UTF_8(strACS);
@@ -312,7 +315,13 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 	}
 	av_dict_free(&ioptions);
 
-	av_dump_format(ictx, 0, in_Audio, 0);
+	ret = avformat_find_stream_info(ictx, NULL);
+	if (0 != ret)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
 
 	for (unsigned int i = 0; i < ictx->nb_streams; i++)
 	{
@@ -322,6 +331,7 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 			break;
 		}
 	}
+
 	if (-1 == audio_stream_index)
 	{
 		cout << "[av_audio_to_rtmp]no find audio stream." << endl;
@@ -329,14 +339,35 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 		return;
 	}
 
+	AVCodec* icodec = avcodec_find_decoder(ictx->streams[audio_stream_index]->codecpar->codec_id);
+	if (icodec == NULL)
+	{
+		cout << "[av_audio_to_rtmp]no find avcodec_find_decoder stream." << endl;
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	ret = avcodec_open2(ictx->streams[audio_stream_index]->codec, icodec, NULL);
+	if (ret < 0)
+	{
+		av_error_string_output(__FUNCTION__, __LINE__, ret);
+		av_free_context(ictx, octx);
+		return;
+	}
+
+	av_dump_format(ictx, 0, in_Audio, 0);
+
+	//ictx->streams[audio_stream_index]->codecpar->channel_layout = AV_CH_LAYOUT_STEREO;
 	cout << "[av_audio_to_rtmp]fmt=" << av_get_sample_fmt_name((AVSampleFormat)ictx->streams[audio_stream_index]->codecpar->format) << endl;
+	cout << "[av_audio_to_rtmp]bit_rate=" << ictx->streams[audio_stream_index]->codecpar->bit_rate << endl;
+	cout << "[av_audio_to_rtmp]sample_rate=" << ictx->streams[audio_stream_index]->codecpar->sample_rate << endl;
 
 	//Re-sampling
 	AVSampleFormat outSampleFmt = AVSampleFormat::AV_SAMPLE_FMT_FLTP;
 	SwrContext* asc = nullptr;
 	asc = swr_alloc_set_opts(asc,
 		av_get_default_channel_layout(channels), outSampleFmt, samplerate,//输出格式
-		av_get_default_channel_layout(channels), (AVSampleFormat)ictx->streams[audio_stream_index]->codecpar->format, samplerate, 0, 0);//输入格式
+		av_get_default_channel_layout(channels), (AVSampleFormat)ictx->streams[audio_stream_index]->codecpar->format, ictx->streams[audio_stream_index]->codecpar->sample_rate, 0, 0);//输入格式
 	if (!asc)
 	{
 		cout << "[av_audio_to_rtmp]swr_alloc_set_opts error." << endl;
@@ -373,28 +404,28 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 		return;
 	}
 
-	AVCodecContext* ac = avcodec_alloc_context3(codec);
-	if (!ac)
+	AVCodecContext* output_ac = avcodec_alloc_context3(codec);
+	if (!output_ac)
 	{
 		cout << "[av_audio_to_rtmp]avcodec_alloc_context3 failed!" << endl;
 		av_free_context(ictx, octx);
 		return;
 	}
 
-	ac->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-	ac->thread_count = 8;
-	ac->bit_rate = 40000;
-	ac->sample_rate = samplerate;
-	ac->sample_fmt = AV_SAMPLE_FMT_FLTP;
-	ac->channels = channels;
-	ac->channel_layout = av_get_default_channel_layout(channels);
+	output_ac->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+	output_ac->thread_count = 4;
+	output_ac->bit_rate = 40000;
+	output_ac->sample_rate = samplerate;
+	output_ac->sample_fmt = outSampleFmt;
+	output_ac->channels = channels;
+	output_ac->channel_layout = av_get_default_channel_layout(channels);
 
 	AVDictionary* ooptions = nullptr;
-	av_dict_set_int(&ooptions, "sample_rate", samplerate, 0);
-	av_dict_set_int(&ooptions, "sample_size", samplesize, 0);
-	av_dict_set_int(&ooptions, "channels", channels, 0);
+	//av_dict_set_int(&ooptions, "sample_rate", samplerate, 0);
+	//av_dict_set_int(&ooptions, "sample_size", samplesize, 0);
+	//av_dict_set_int(&ooptions, "channels", channels, 0);
 
-	ret = avcodec_open2(ac, 0, &ooptions);
+	ret = avcodec_open2(output_ac, 0, &ooptions);
 	if (ret != 0)
 	{
 		av_error_string_output(__FUNCTION__, __LINE__, ret);
@@ -421,15 +452,13 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 	}
 
 	output_stream->codecpar->codec_tag = 0;
-	ret = avcodec_parameters_from_context(output_stream->codecpar, ac);
+	ret = avcodec_parameters_from_context(output_stream->codecpar, output_ac);
 	if (0 != ret)
 	{
 		av_error_string_output(__FUNCTION__, __LINE__, ret);
 		av_free_context(ictx, octx);
 		return;
 	}
-
-	av_dump_format(octx, 0, out_url_file, 1);
 
 	ret = avio_open(&octx->pb, out_url_file, AVIO_FLAG_WRITE);
 	if (ret != 0)
@@ -439,6 +468,8 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 		av_free_context(ictx, octx);
 		return;
 	}
+
+	av_dump_format(octx, 0, out_url_file, 1);
 
 	ret = avformat_write_header(octx, NULL);
 	if (0 > ret)
@@ -463,7 +494,7 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 		}
 
 		frameindex++;
-		//cout << "frameindex=" << frameindex << endl;
+		cout << "frameindex=" << frameindex << ", pk.size=" << inpkt.size << endl;
 
 		if (0 >= inpkt.size)
 		{
@@ -473,28 +504,27 @@ void av_audio_to_rtmp(const char* in_Audio, int channels, int samplesize, int sa
 		const uint8_t* indata[AV_NUM_DATA_POINTERS] = { 0 };
 		indata[0] = (uint8_t*)inpkt.data;
 		int len = swr_convert(asc, pcm->data, pcm->nb_samples, //输出参数，输出存储地址和样本数量
-			indata, pcm->nb_samples
-		);
+			indata, pcm->nb_samples);
 
 		pcm->pts = apts;
-		apts += av_rescale_q(pcm->nb_samples, { 1, samplerate }, ac->time_base);
+		apts += av_rescale_q(pcm->nb_samples, { 1, samplerate }, output_ac->time_base);
 
-		int ret = avcodec_send_frame(ac, pcm);
+		int ret = avcodec_send_frame(output_ac, pcm);
 		if (ret != 0)
 		{
 			continue;
 		}
 
-		ret = avcodec_receive_packet(ac, &outpkt);
+		ret = avcodec_receive_packet(output_ac, &outpkt);
 		if (ret != 0)
 		{
 			continue;
 		}
 
 		//推流
-		outpkt.pts = av_rescale_q(outpkt.pts, ac->time_base, output_stream->time_base);
-		outpkt.dts = av_rescale_q(outpkt.dts, ac->time_base, output_stream->time_base);
-		outpkt.duration = av_rescale_q(outpkt.duration, ac->time_base, output_stream->time_base);
+		outpkt.pts = av_rescale_q(outpkt.pts, output_ac->time_base, output_stream->time_base);
+		outpkt.dts = av_rescale_q(outpkt.dts, output_ac->time_base, output_stream->time_base);
+		outpkt.duration = av_rescale_q(outpkt.duration, output_ac->time_base, output_stream->time_base);
 		ret = av_interleaved_write_frame(octx, &outpkt);
 		if (ret == 0)
 		{

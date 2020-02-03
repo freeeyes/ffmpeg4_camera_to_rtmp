@@ -35,7 +35,6 @@ void Device_Audio_test()
 		cout << "[Audio]" << szVedioCommand << endl;
 		//av_audio_to_rtmp(szVedioCommand, 2, 16, 44100, RTMP_URL);
 		av_audio_to_rtmp(szVedioCommand, 2, 16, 44100, "abc.aac");
-		
 	}
 	else
 	{
