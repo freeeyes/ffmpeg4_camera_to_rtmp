@@ -21,7 +21,6 @@ extern "C"
 #include "libavfilter/buffersrc.h"
 }
 #include "vediolist.h"
-#include "CSwr.h"
 #include <iostream>
 using namespace std;
 
