@@ -139,10 +139,10 @@ inline std::string ASCII2UTF_8(std::string& strAsciiCode)
 
 static char* WCharToChar(WCHAR* s)
 {
-	int w_nlen = WideCharToMultiByte(CP_ACP, 0, s, -1, NULL, 0, NULL, false);
+	int w_nlen = WideCharToMultiByte(CP_ACP, 0, s, -1, NULL, 0, NULL, FALSE);
 	char* ret = new char[w_nlen];
 	memset(ret, 0, w_nlen);
-	WideCharToMultiByte(CP_ACP, 0, s, -1, ret, w_nlen, NULL, false);
+	WideCharToMultiByte(CP_ACP, 0, s, -1, ret, w_nlen, NULL, FALSE);
 	return ret;
 
 }
