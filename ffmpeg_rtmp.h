@@ -20,7 +20,7 @@ extern "C"
 #include "libavfilter/buffersink.h"
 #include "libavfilter/buffersrc.h"
 }
-#include "vediolist.h"
+#include "videolist.h"
 #include <iostream>
 using namespace std;
 
@@ -48,7 +48,7 @@ public:
 class CAVFormatInfo
 {
 public:
-	AVFormatContext* ictx = nullptr;   //ÊäÈëÔ´
+	AVFormatContext* ictx = nullptr;   //ï¿½ï¿½ï¿½ï¿½Ô´
 	bool is_run = false;
 };
 
